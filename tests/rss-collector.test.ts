@@ -1,7 +1,12 @@
 import type Parser from "rss-parser";
 import { describe, expect, it } from "vitest";
 import type { RssFeedConfig } from "../src/config/rss-feeds.js";
-import { RssCollector, type RssParserClient } from "../src/collectors/rss-collector.js";
+import {
+  AllRssFeedsFailedError,
+  RssCollector,
+  type RssParserClient
+} from "../src/collectors/rss-collector.js";
+import { ARTICLE_TITLE_MAX_LENGTH } from "../src/models/article.js";
 
 describe("RssCollector", () => {
   const startTime = new Date("2026-07-27T22:00:00.000Z");
@@ -115,6 +120,120 @@ describe("RssCollector", () => {
     expect(result.map((article) => article.title)).toEqual(["Successful story"]);
   });
 
+  it("throws a distinct error when every configured feed fails", async () => {
+    const feed = feedConfig();
+    const collector = new RssCollector([feed], {
+      parser: parserWithFeeds({}, new Set([feed.url]))
+    });
+
+    await expect(collector.collect(startTime, endTime)).rejects.toBeInstanceOf(
+      AllRssFeedsFailedError
+    );
+  });
+
+  it("keeps valid items when one item has an unexpected runtime shape", async () => {
+    const malformedItem = {
+      title: { nested: "Not a string" },
+      link: "https://example.com/malformed",
+      isoDate: "2026-07-28T02:00:00.000Z"
+    } as unknown as Parser.Item;
+    const collector = new RssCollector([feedConfig()], {
+      parser: parserWithFeeds({
+        "https://example.com/feed.xml": [
+          {
+            title: "First valid story",
+            link: "https://example.com/first",
+            isoDate: "2026-07-28T01:00:00.000Z"
+          },
+          malformedItem,
+          {
+            title: "Second valid story",
+            link: "https://example.com/second",
+            isoDate: "2026-07-28T03:00:00.000Z"
+          }
+        ]
+      })
+    });
+
+    const result = await collector.collect(startTime, endTime);
+
+    expect(result.map((article) => article.title)).toEqual([
+      "First valid story",
+      "Second valid story"
+    ]);
+  });
+
+  it("rejects timezone-less publication dates", async () => {
+    const collector = new RssCollector([feedConfig()], {
+      parser: parserWithFeeds({
+        "https://example.com/feed.xml": [
+          {
+            title: "Ambiguous date story",
+            link: "https://example.com/ambiguous",
+            isoDate: "2026-07-28T02:00:00"
+          }
+        ]
+      })
+    });
+
+    await expect(collector.collect(startTime, endTime)).resolves.toEqual([]);
+  });
+
+  it("rejects a timezone-less raw date even when the parser derived an ISO date", async () => {
+    const collector = new RssCollector([feedConfig()], {
+      parser: parserWithFeeds({
+        "https://example.com/feed.xml": [
+          {
+            title: "Parser-normalised ambiguous date",
+            link: "https://example.com/parser-normalised",
+            pubDate: "2026-07-28T02:00:00",
+            isoDate: "2026-07-28T02:00:00.000Z",
+            rawPublicationDate: "2026-07-28T02:00:00"
+          }
+        ]
+      })
+    });
+
+    await expect(collector.collect(startTime, endTime)).resolves.toEqual([]);
+  });
+
+  it("sanitises and limits RSS titles", async () => {
+    const collector = new RssCollector([feedConfig()], {
+      parser: parserWithFeeds({
+        "https://example.com/feed.xml": [
+          {
+            title: `\u001B[2J${"A".repeat(ARTICLE_TITLE_MAX_LENGTH + 100)}`,
+            link: "https://example.com/long",
+            isoDate: "2026-07-28T02:00:00.000Z"
+          }
+        ]
+      })
+    });
+
+    const result = await collector.collect(startTime, endTime);
+
+    expect(result[0]?.title).toBe("A".repeat(ARTICLE_TITLE_MAX_LENGTH));
+  });
+
+  it("applies ArticleSchema to normalised feed output", async () => {
+    const collector = new RssCollector(
+      [feedConfig({ defaultCredibilityScore: 2 })],
+      {
+        parser: parserWithFeeds({
+          "https://example.com/feed.xml": [
+            {
+              title: "Invalid configured score",
+              link: "https://example.com/invalid-score",
+              isoDate: "2026-07-28T02:00:00.000Z"
+            }
+          ]
+        })
+      }
+    );
+
+    await expect(collector.collect(startTime, endTime)).resolves.toEqual([]);
+  });
+
   it("creates the same stable ID for equivalent tracking URLs", async () => {
     const collector = new RssCollector([feedConfig()], {
       parser: parserWithFeeds({
@@ -157,7 +276,7 @@ function parserWithFeeds(
   failedUrls = new Set<string>()
 ): RssParserClient {
   return {
-    async parseURL(feedUrl: string): Promise<Parser.Output<Record<string, unknown>>> {
+    async parseURL(feedUrl: string) {
       if (failedUrls.has(feedUrl)) {
         throw new Error("Feed unavailable");
       }
