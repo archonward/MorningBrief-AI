@@ -5,6 +5,10 @@ node_modules/
 dist/
 build/
 
+# Runtime state
+data/processed-articles.json
+data/*.tmp
+
 # Test coverage
 coverage/
 
