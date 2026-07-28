@@ -21,4 +21,12 @@ describe("cleanRssText", () => {
   it("returns undefined when the cleaned value is empty", () => {
     expect(cleanRssText(" <br> &nbsp; ")).toBeUndefined();
   });
+
+  it("removes ANSI escapes and unsafe terminal control characters", () => {
+    expect(cleanRssText("\u001B[2JBreaking\u0000 news")).toBe("Breaking news");
+  });
+
+  it("limits the cleaned output length", () => {
+    expect(cleanRssText("A".repeat(20), 10)).toBe("A".repeat(10));
+  });
 });

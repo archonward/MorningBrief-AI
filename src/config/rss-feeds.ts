@@ -6,14 +6,44 @@ export interface RssFeedConfig {
 }
 
 function createFeed(config: RssFeedConfig): RssFeedConfig {
+  const name = config.name.trim();
+  const category = config.category.trim();
+  const url = parseHttpUrl(config.url);
+
+  if (!name) {
+    throw new Error("RSS feed name must not be empty");
+  }
+
+  if (!category) {
+    throw new Error(`RSS feed category must not be empty for ${name}`);
+  }
+
   if (
+    !Number.isFinite(config.defaultCredibilityScore) ||
     config.defaultCredibilityScore < 0 ||
     config.defaultCredibilityScore > 1
   ) {
-    throw new Error(`Invalid RSS credibility score for ${config.name}`);
+    throw new Error(`Invalid RSS credibility score for ${name}`);
   }
 
-  return config;
+  return {
+    ...config,
+    name,
+    category,
+    url
+  };
+}
+
+function parseHttpUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+    return url.toString();
+  } catch {
+    throw new Error(`Invalid RSS feed URL: ${value}`);
+  }
 }
 
 // These scores are configurable application defaults, not objective measures of truth.
