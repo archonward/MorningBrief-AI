@@ -1,4 +1,5 @@
 import { RssCollector } from "./collectors/rss-collector.js";
+import { rssFeeds } from "./config/rss-feeds.js";
 import { loadSettings } from "./config/settings.js";
 import { ConsoleDelivery } from "./delivery/console-delivery.js";
 import { InMemoryArticleRepository } from "./repositories/article-repository.js";
@@ -18,7 +19,14 @@ export async function main(): Promise<void> {
   });
 
   const { startTime, endTime } = calculateNewsWindow(settings.newsLookbackHours);
-  const collector = new RssCollector();
+
+  logger.info("Calculated overnight news window", {
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString()
+  });
+  logger.info("Configured RSS feeds", { count: rssFeeds.length });
+
+  const collector = new RssCollector(rssFeeds, { logger });
   const repository = new InMemoryArticleRepository();
   const filter = new ArticleFilter(repository);
   const ranker = new ArticleRanker();
@@ -30,13 +38,18 @@ export async function main(): Promise<void> {
   const delivery = new ConsoleDelivery();
 
   const articles = await collector.collect(startTime, endTime);
+  logger.info("Collected RSS articles", { count: articles.length });
+
   const filteredArticles = await filter.filter(articles, startTime, endTime);
+  logger.info("Filtered articles", { count: filteredArticles.length });
+
   const rankedArticles = ranker.rank(filteredArticles, endTime);
   const briefing = await briefingGenerator.generate(
     rankedArticles,
     startTime,
     endTime
   );
+  logger.info("Generated briefing", { items: briefing.items.length });
 
   await delivery.deliver(briefing);
 }
