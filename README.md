@@ -7,7 +7,7 @@ This first version only creates the project foundation. It does not call paid AP
 ## Planned Workflow
 
 1. Load application settings from environment variables.
-2. Calculate the overnight news window.
+2. Calculate the most recent configured briefing window in the user's timezone.
 3. Collect articles from configured RSS feeds or future news tools.
 4. Filter invalid, duplicate, old, and previously processed articles.
 5. Rank stories by significance, recency, credibility, confirmation, relevance, and penalties.
@@ -32,9 +32,26 @@ Credibility scores in `src/config/rss-feeds.ts` are configurable application def
 
 `RssCollector` receives feed configuration through its constructor, fetches each feed with `rss-parser`, and normalises valid RSS items into the shared `Article` model. Each feed is processed independently, so a failed feed logs a warning and the application continues with articles from the feeds that succeeded.
 
+If every configured feed fails, the run fails explicitly instead of producing a
+misleading empty briefing. Individual malformed entries are skipped without
+discarding other valid entries from the same feed.
+
 RSS is used before API-based news collection because it is simple, widely supported, and does not require paid credentials. This makes the early pipeline easier to test and reason about before adding API clients or AI ranking.
 
 RSS descriptions are often incomplete. Some feeds provide only headlines and short snippets, and MorningBrief AI does not fetch or extract full article webpages yet.
+
+## Briefing Window And Processed Articles
+
+`USER_TIMEZONE` and `BRIEFING_HOUR` anchor the window to the most recent local
+briefing boundary. For the defaults, a run after 08:00 Singapore time ends its
+window at 08:00 that day; a run before 08:00 uses the previous day's boundary.
+Internally, article and window dates remain absolute timestamps and are logged in
+UTC ISO format.
+
+After successful console delivery, selected article URLs are recorded in
+`data/processed-articles.json`. The file is local runtime state and is ignored by
+Git. Canonical URL matching prevents the same tracked or fragmented URL from
+being selected again in a later process.
 
 ## Repository Structure
 
