@@ -11,15 +11,16 @@ export class ConsoleDelivery {
     console.log("");
 
     if (briefing.items.length === 0) {
-      console.log("No eligible articles were found for this briefing window.");
+      console.log("No overnight stories were found for this briefing window.");
       return;
     }
 
     briefing.items.forEach((item, index) => {
       console.log(`${index + 1}. ${item.headline}`);
+      console.log(`   Source: ${item.source}`);
+      console.log(`   Published: ${item.publishedAt.toISOString()}`);
       console.log(`   Summary: ${item.summary}`);
       console.log(`   Why it matters: ${item.whyItMatters}`);
-      console.log(`   Source: ${item.source}`);
       console.log(`   URL: ${item.url}`);
       console.log("");
     });

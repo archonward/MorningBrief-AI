@@ -8,11 +8,33 @@ This first version only creates the project foundation. It does not call paid AP
 
 1. Load application settings from environment variables.
 2. Calculate the overnight news window.
-3. Collect articles from RSS feeds or future news tools.
+3. Collect articles from configured RSS feeds or future news tools.
 4. Filter invalid, duplicate, old, and previously processed articles.
 5. Rank stories by significance, recency, credibility, confirmation, relevance, and penalties.
 6. Generate no more than five briefing items.
 7. Deliver the briefing to the console, email, Telegram, or a dashboard.
+
+## Configured RSS Feeds
+
+The initial live collection uses a small set of reputable public RSS feeds:
+
+| Feed | Category | Purpose |
+| --- | --- | --- |
+| BBC News - World | International | Global overnight developments |
+| CNA - Singapore | Singapore | Singapore and Southeast Asian context |
+| BBC News - Business | Business | Markets, companies, and economics |
+| BBC News - Technology | Technology | Technology and digital policy |
+| The Guardian - Science | Science | Science and general current affairs |
+
+Credibility scores in `src/config/rss-feeds.ts` are configurable application defaults. They are not objective truth ratings and should be reviewed as the ranking model becomes more sophisticated.
+
+## How RSS Collection Works
+
+`RssCollector` receives feed configuration through its constructor, fetches each feed with `rss-parser`, and normalises valid RSS items into the shared `Article` model. Each feed is processed independently, so a failed feed logs a warning and the application continues with articles from the feeds that succeeded.
+
+RSS is used before API-based news collection because it is simple, widely supported, and does not require paid credentials. This makes the early pipeline easier to test and reason about before adding API clients or AI ranking.
+
+RSS descriptions are often incomplete. Some feeds provide only headlines and short snippets, and MorningBrief AI does not fetch or extract full article webpages yet.
 
 ## Repository Structure
 
@@ -90,6 +112,12 @@ npm run dev
 Run the briefing script once:
 
 ```bash
+npm run run:briefing
+```
+
+PowerShell:
+
+```powershell
 npm run run:briefing
 ```
 
