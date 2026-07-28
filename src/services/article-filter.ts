@@ -1,5 +1,6 @@
 import type { Article } from "../models/article.js";
 import type { ArticleRepository } from "../repositories/article-repository.js";
+import { normaliseArticleUrl } from "../utils/url-normaliser.js";
 
 export class ArticleFilter {
   public constructor(private readonly repository?: ArticleRepository) {}
@@ -21,11 +22,11 @@ export class ArticleFilter {
         continue;
       }
 
-      if (!isValidUrl(article.url)) {
+      const normalizedUrl = normaliseArticleUrl(article.url);
+      if (!normalizedUrl) {
         continue;
       }
 
-      const normalizedUrl = normalizeUrl(article.url);
       if (seenUrls.has(normalizedUrl)) {
         continue;
       }
@@ -44,17 +45,4 @@ export class ArticleFilter {
 
 function isWithinWindow(value: Date, startTime: Date, endTime: Date): boolean {
   return value >= startTime && value <= endTime;
-}
-
-function isValidUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function normalizeUrl(url: string): string {
-  return url.trim().toLowerCase();
 }

@@ -43,6 +43,59 @@ describe("ArticleFilter", () => {
     expect(result.map((article) => article.id)).toEqual(["first", "other"]);
   });
 
+  it("treats URLs that differ only by tracking parameters as duplicates", async () => {
+    const filter = new ArticleFilter();
+    const articles = [
+      makeArticle({ id: "first", url: "https://example.com/story?id=123" }),
+      makeArticle({
+        id: "tracked",
+        url: "https://example.com/story?id=123&utm_source=rss&utm_medium=email"
+      })
+    ];
+
+    const result = await filter.filter(articles, startTime, endTime);
+
+    expect(result.map((article) => article.id)).toEqual(["first"]);
+    expect(result[0]?.url).toBe("https://example.com/story?id=123");
+  });
+
+  it("ignores URL fragments when detecting duplicates", async () => {
+    const filter = new ArticleFilter();
+    const articles = [
+      makeArticle({ id: "first", url: "https://example.com/story#main" }),
+      makeArticle({ id: "fragment", url: "https://example.com/story#comments" })
+    ];
+
+    const result = await filter.filter(articles, startTime, endTime);
+
+    expect(result.map((article) => article.id)).toEqual(["first"]);
+    expect(result[0]?.url).toBe("https://example.com/story#main");
+  });
+
+  it("preserves meaningful unknown query parameters for duplicate detection", async () => {
+    const filter = new ArticleFilter();
+    const articles = [
+      makeArticle({ id: "first", url: "https://example.com/story?id=123" }),
+      makeArticle({ id: "second", url: "https://example.com/story?id=456" })
+    ];
+
+    const result = await filter.filter(articles, startTime, endTime);
+
+    expect(result.map((article) => article.id)).toEqual(["first", "second"]);
+  });
+
+  it("removes invalid URLs", async () => {
+    const filter = new ArticleFilter();
+    const articles = [
+      makeArticle({ id: "invalid", url: "not a url" }),
+      makeArticle({ id: "valid", url: "https://example.com/valid" })
+    ];
+
+    const result = await filter.filter(articles, startTime, endTime);
+
+    expect(result.map((article) => article.id)).toEqual(["valid"]);
+  });
+
   it("keeps valid articles", async () => {
     const filter = new ArticleFilter();
     const article = makeArticle({ id: "valid" });
