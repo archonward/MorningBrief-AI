@@ -8,6 +8,7 @@ import { FileArticleRepository } from "./repositories/article-repository.js";
 import { ArticleFilter } from "./services/article-filter.js";
 import { ArticleRanker } from "./services/article-ranker.js";
 import { BriefingGenerator } from "./services/briefing-generator.js";
+import { HeadlineDeduplicator } from "./services/headline-deduplicator.js";
 import { Summariser } from "./services/summariser.js";
 import { createLogger } from "./utils/logger.js";
 
@@ -40,6 +41,7 @@ export async function main(): Promise<void> {
   );
   const filter = new ArticleFilter(repository);
   const ranker = new ArticleRanker();
+  const headlineDeduplicator = new HeadlineDeduplicator();
   const summariser = new Summariser();
   const briefingGenerator = new BriefingGenerator(
     summariser,
@@ -54,8 +56,13 @@ export async function main(): Promise<void> {
   logger.info("Filtered articles", { count: filteredArticles.length });
 
   const rankedArticles = ranker.rank(filteredArticles, endTime);
+  const briefingCandidates = headlineDeduplicator.deduplicate(rankedArticles);
+  logger.info("Deduplicated matching headlines", {
+    before: rankedArticles.length,
+    after: briefingCandidates.length
+  });
   const briefing = await briefingGenerator.generate(
-    rankedArticles,
+    briefingCandidates,
     startTime,
     endTime
   );
@@ -63,7 +70,7 @@ export async function main(): Promise<void> {
 
   await delivery.deliver(briefing);
 
-  const deliveredArticles = rankedArticles.slice(0, briefing.items.length);
+  const deliveredArticles = briefingCandidates.slice(0, briefing.items.length);
   for (const article of deliveredArticles) {
     await repository.saveProcessedArticle(article);
   }
