@@ -2,6 +2,10 @@ import type { NewsCollector } from "../src/collectors/news-collector.js";
 import { RssCollector } from "../src/collectors/rss-collector.js";
 import { rssFeeds } from "../src/config/rss-feeds.js";
 import { loadSettings } from "../src/config/settings.js";
+import {
+  createCandidatePairDiagnostics,
+  type CandidatePairDiagnostic
+} from "../src/diagnostics/candidate-pair-diagnostics.js";
 import { calculateNewsWindow, isMainModule } from "../src/index.js";
 import { InMemoryArticleRepository } from "../src/repositories/article-repository.js";
 import { ArticleFilter } from "../src/services/article-filter.js";
@@ -36,6 +40,7 @@ export interface CandidateSnapshot {
     exactHeadlineDeduplicated: number;
   };
   candidates: CandidateSnapshotArticle[];
+  pairDiagnostics: CandidatePairDiagnostic[];
 }
 
 interface CandidateSnapshotArticle {
@@ -92,7 +97,8 @@ export async function inspectCandidates(
       publishedAt: article.publishedAt.toISOString(),
       category: article.category,
       importanceScore: article.importanceScore
-    }))
+    })),
+    pairDiagnostics: createCandidatePairDiagnostics(candidates)
   };
 }
 
