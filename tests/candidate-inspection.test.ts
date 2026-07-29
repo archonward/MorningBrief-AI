@@ -85,6 +85,13 @@ describe("inspectCandidates", () => {
       category: "world",
       importanceScore: 0.9
     });
+    expect(snapshot.pairDiagnostics).toHaveLength(1);
+    expect(snapshot.pairDiagnostics[0]).toMatchObject({
+      leftCandidate: 1,
+      rightCandidate: 2,
+      sameCategory: true,
+      sameSource: false
+    });
     expect(saveProcessedArticle).not.toHaveBeenCalled();
     saveProcessedArticle.mockRestore();
   });
@@ -111,6 +118,7 @@ describe("inspectCandidates", () => {
       exactHeadlineDeduplicated: 0
     });
     expect(snapshot.candidates).toEqual([]);
+    expect(snapshot.pairDiagnostics).toEqual([]);
   });
 });
 
