@@ -159,6 +159,19 @@ describe("validateRankingResponse", () => {
     expect(validateRankingResponse([], { assessments: [] })).toEqual([]);
   });
 
+  it("normalises strict-output null uncertainty to absence", () => {
+    const [assessment] = validateRankingResponse(
+      [makeArticle({ id: "article-1" })],
+      {
+        assessments: [
+          makeAssessment({ articleId: "article-1", uncertainty: null })
+        ]
+      }
+    );
+
+    expect(assessment?.uncertainty).toBeUndefined();
+  });
+
   it("does not mutate the candidates or external response", () => {
     const candidates = Object.freeze([
       Object.freeze(makeArticle({ id: "article-1" })),
@@ -233,7 +246,7 @@ function makeAssessment(
     significanceScore: number;
     confidenceScore: number;
     rationale: string;
-    uncertainty: string;
+    uncertainty: string | null;
   }>
 ) {
   return {

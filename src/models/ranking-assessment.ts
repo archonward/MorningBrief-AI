@@ -4,6 +4,18 @@ export const RANKING_RATIONALE_MAX_LENGTH = 1_000;
 export const RANKING_UNCERTAINTY_MAX_LENGTH = 1_000;
 
 const rankingScoreSchema = z.number().finite().min(0).max(1);
+const rankingUncertaintySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(RANKING_UNCERTAINTY_MAX_LENGTH)
+  .describe(
+    "Missing context, conflicting reporting, ambiguity, or other relevant limitations"
+  )
+  // Strict Structured Outputs represents optional fields as required and nullable.
+  .nullable()
+  .optional()
+  .transform((value) => value ?? undefined);
 
 export const RankingAssessmentSchema = z
   .object({
@@ -20,15 +32,7 @@ export const RankingAssessmentSchema = z
       .min(1)
       .max(RANKING_RATIONALE_MAX_LENGTH)
       .describe("A brief explanation of the main reason for the score"),
-    uncertainty: z
-      .string()
-      .trim()
-      .min(1)
-      .max(RANKING_UNCERTAINTY_MAX_LENGTH)
-      .describe(
-        "Missing context, conflicting reporting, ambiguity, or other relevant limitations"
-      )
-      .optional()
+    uncertainty: rankingUncertaintySchema
   })
   .strict();
 
