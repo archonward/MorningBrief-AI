@@ -2,7 +2,9 @@
 
 MorningBrief AI is a TypeScript and Node.js project for building an agentic morning news briefing system. The planned system will collect news published overnight, rank the most important developments, select the top five stories, summarise them, and produce a concise morning briefing.
 
-This first version only creates the project foundation. It does not call paid APIs, run an LLM, or implement a production news pipeline yet.
+The production workflow collects RSS news, filters and ranks candidates, and
+delivers a deterministic placeholder briefing. AI ranking is available as an
+explicit opt-in; AI summarisation is not enabled.
 
 ## Planned Workflow
 
@@ -116,7 +118,23 @@ Create a local `.env` file from the example:
 cp .env.example .env
 ```
 
-The placeholder version runs without `OPENAI_API_KEY`. That key will become required once AI summarisation is enabled.
+Deterministic ranking is the default and runs without OpenAI credentials. To
+enable production AI ranking, configure:
+
+```dotenv
+AI_RANKING_ENABLED=true
+OPENAI_API_KEY=your_api_key
+OPENAI_RANKING_MODEL=your_ranking_model
+AI_RANKING_MAX_CANDIDATES=20
+```
+
+`AI_RANKING_ENABLED` accepts only `true` or `false` and defaults to `false`.
+When enabled, both `OPENAI_API_KEY` and a non-empty `OPENAI_RANKING_MODEL` are
+required. `AI_RANKING_MAX_CANDIDATES` defaults to `20` and must be an integer
+from `1` to `50`.
+
+Keep the real key only in the ignored local `.env` file. OpenAI API usage may
+incur costs.
 
 ## Run the Project
 
@@ -156,8 +174,28 @@ is optional, defaults to `20`, and must be an integer from `1` to `50`.
 
 The AI ranking diagnostic may incur OpenAI API usage. It is diagnostic-only: it
 does not deliver a briefing, does not write processed history, and does not read
-or update `data/processed-articles.json`. AI ranking is not yet used by the
-production briefing workflow.
+or update `data/processed-articles.json`.
+
+## Production AI Ranking
+
+Production AI ranking is opt-in. With `AI_RANKING_ENABLED=false`, the existing
+deterministic workflow remains unchanged and no ranking prompt, OpenAI client,
+or AI credentials are required.
+
+When enabled, candidates pass through filtering, deterministic pre-ranking, and
+exact-headline deduplication before AI assessment. Only the first
+`AI_RANKING_MAX_CANDIDATES` candidates are submitted in a single request. The
+assessed batch is reordered by AI significance and confidence; candidates
+outside the limit are appended in their existing deterministic order. The limit
+therefore controls request size and API cost without removing candidates.
+
+AI-ranking failures stop the run. MorningBrief AI does not silently fall back,
+deliver a deterministic briefing, or record processed history after an AI
+ranking failure. Successfully delivered articles are persisted according to the
+final AI-ranked order.
+
+AI summarisation is still disabled. Briefing summaries and “why it matters”
+fields continue to use the existing deterministic placeholders.
 
 After building, run the compiled application:
 
