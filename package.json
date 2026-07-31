@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "inspect:candidates": "tsx scripts/inspect-candidates.ts",
+    "inspect:ai-ranking": "tsx scripts/inspect-ai-ranking.ts",
     "run:briefing": "tsx scripts/run-briefing.ts"
   },
   "dependencies": {

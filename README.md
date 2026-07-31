@@ -138,6 +138,27 @@ PowerShell:
 npm run run:briefing
 ```
 
+Inspect the configured article candidates without delivering a briefing:
+
+```powershell
+npm run inspect:candidates
+```
+
+Run the read-only AI ranking diagnostic:
+
+```powershell
+npm run inspect:ai-ranking
+```
+
+`inspect:ai-ranking` requires `OPENAI_API_KEY` and `OPENAI_RANKING_MODEL`.
+`OPENAI_RANKING_MODEL` must be non-empty after trimming. `AI_RANKING_MAX_CANDIDATES`
+is optional, defaults to `20`, and must be an integer from `1` to `50`.
+
+The AI ranking diagnostic may incur OpenAI API usage. It is diagnostic-only: it
+does not deliver a briefing, does not write processed history, and does not read
+or update `data/processed-articles.json`. AI ranking is not yet used by the
+production briefing workflow.
+
 After building, run the compiled application:
 
 ```bash
