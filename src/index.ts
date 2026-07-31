@@ -1,16 +1,62 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import OpenAI from "openai";
+import type { NewsCollector } from "./collectors/news-collector.js";
 import { RssCollector } from "./collectors/rss-collector.js";
 import { rssFeeds } from "./config/rss-feeds.js";
-import { loadSettings } from "./config/settings.js";
+import { loadSettings, type Settings } from "./config/settings.js";
 import { ConsoleDelivery } from "./delivery/console-delivery.js";
-import { FileArticleRepository } from "./repositories/article-repository.js";
+import type { Article } from "./models/article.js";
+import type { MorningBriefing } from "./models/briefing.js";
+import {
+  FileArticleRepository,
+  type ArticleRepository
+} from "./repositories/article-repository.js";
+import { AiBriefingCandidateRanker } from "./services/ai-briefing-candidate-ranker.js";
+import { AiRankingService } from "./services/ai-ranking-service.js";
 import { ArticleFilter } from "./services/article-filter.js";
 import { ArticleRanker } from "./services/article-ranker.js";
 import { BriefingGenerator } from "./services/briefing-generator.js";
 import { HeadlineDeduplicator } from "./services/headline-deduplicator.js";
+import {
+  OpenAiRankingProvider,
+  type OpenAiRankingClient
+} from "./services/openai-ranking-provider.js";
+import { loadRankingPrompt } from "./services/ranking-prompt-loader.js";
 import { Summariser } from "./services/summariser.js";
-import { createLogger } from "./utils/logger.js";
+import { createLogger, type Logger } from "./utils/logger.js";
+
+export interface BriefingGeneratorPort {
+  generate(
+    rankedArticles: Article[],
+    timeWindowStart: Date,
+    timeWindowEnd: Date
+  ): Promise<MorningBriefing>;
+}
+
+export interface BriefingDeliveryPort {
+  deliver(briefing: MorningBriefing): Promise<void>;
+}
+
+export interface BriefingCandidateRankerPort {
+  rank(candidates: readonly Article[]): Promise<Article[]>;
+}
+
+export interface ProductionBriefingOptions {
+  settings: Settings;
+  logger: Logger;
+  collector: NewsCollector;
+  repository: ArticleRepository;
+  briefingGenerator: BriefingGeneratorPort;
+  delivery: BriefingDeliveryPort;
+  aiCandidateRanker?: BriefingCandidateRankerPort;
+  now?: Date;
+}
+
+export interface ProductionAiRankingFactories {
+  promptLoader?: () => Promise<string>;
+  clientFactory?: (apiKey: string) => OpenAiRankingClient;
+}
 
 export async function main(): Promise<void> {
   const settings = loadSettings();
@@ -22,59 +68,137 @@ export async function main(): Promise<void> {
     lookbackHours: settings.newsLookbackHours
   });
 
-  const { startTime, endTime } = calculateNewsWindow(
-    settings.newsLookbackHours,
-    new Date(),
-    settings.userTimezone,
-    settings.briefingHour
-  );
-
-  logger.info("Calculated overnight news window", {
-    startTime: startTime.toISOString(),
-    endTime: endTime.toISOString()
-  });
   logger.info("Configured RSS feeds", { count: rssFeeds.length });
 
   const collector = new RssCollector(rssFeeds, { logger });
   const repository = new FileArticleRepository(
     resolve("data", "processed-articles.json")
   );
-  const filter = new ArticleFilter(repository);
-  const ranker = new ArticleRanker();
-  const headlineDeduplicator = new HeadlineDeduplicator();
   const summariser = new Summariser();
   const briefingGenerator = new BriefingGenerator(
     summariser,
     settings.maxBriefingItems
   );
   const delivery = new ConsoleDelivery();
+  const aiCandidateRanker = await createProductionAiCandidateRanker(settings);
 
-  const articles = await collector.collect(startTime, endTime);
-  logger.info("Collected RSS articles", { count: articles.length });
+  await runProductionBriefing({
+    settings,
+    logger,
+    collector,
+    repository,
+    briefingGenerator,
+    delivery,
+    ...(aiCandidateRanker === undefined ? {} : { aiCandidateRanker })
+  });
+}
 
+export async function createProductionAiCandidateRanker(
+  settings: Settings,
+  factories: ProductionAiRankingFactories = {}
+): Promise<AiBriefingCandidateRanker | undefined> {
+  if (!settings.aiRankingEnabled) {
+    return undefined;
+  }
+
+  if (
+    settings.openAiApiKey === undefined ||
+    settings.openAiRankingModel === undefined
+  ) {
+    throw new Error(
+      "Enabled production AI ranking requires OPENAI_API_KEY and OPENAI_RANKING_MODEL"
+    );
+  }
+
+  const rankingPrompt = await (
+    factories.promptLoader ?? loadRankingPrompt
+  )();
+  const client = (
+    factories.clientFactory ??
+    ((apiKey: string) => new OpenAI({ apiKey }))
+  )(settings.openAiApiKey);
+  const provider = new OpenAiRankingProvider(
+    client,
+    settings.openAiRankingModel,
+    rankingPrompt
+  );
+
+  return new AiBriefingCandidateRanker(
+    new AiRankingService(provider),
+    settings.aiRankingMaxCandidates
+  );
+}
+
+export async function runProductionBriefing(
+  options: ProductionBriefingOptions
+): Promise<void> {
+  const now = options.now ?? new Date();
+  const { startTime, endTime } = calculateNewsWindow(
+    options.settings.newsLookbackHours,
+    now,
+    options.settings.userTimezone,
+    options.settings.briefingHour
+  );
+
+  options.logger.info("Calculated overnight news window", {
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString()
+  });
+
+  const articles = await options.collector.collect(startTime, endTime);
+  options.logger.info("Collected RSS articles", { count: articles.length });
+
+  const filter = new ArticleFilter(options.repository);
   const filteredArticles = await filter.filter(articles, startTime, endTime);
-  logger.info("Filtered articles", { count: filteredArticles.length });
+  options.logger.info("Filtered articles", { count: filteredArticles.length });
 
-  const rankedArticles = ranker.rank(filteredArticles, endTime);
-  const briefingCandidates = headlineDeduplicator.deduplicate(rankedArticles);
-  logger.info("Deduplicated matching headlines", {
+  const rankedArticles = new ArticleRanker().rank(filteredArticles, endTime);
+  let briefingCandidates = new HeadlineDeduplicator().deduplicate(
+    rankedArticles
+  );
+  options.logger.info("Deduplicated matching headlines", {
     before: rankedArticles.length,
     after: briefingCandidates.length
   });
-  const briefing = await briefingGenerator.generate(
+
+  if (options.settings.aiRankingEnabled) {
+    if (options.aiCandidateRanker === undefined) {
+      throw new Error("AI ranking is enabled but no candidate ranker was provided");
+    }
+
+    const submitted = Math.min(
+      briefingCandidates.length,
+      options.settings.aiRankingMaxCandidates
+    );
+    options.logger.info("Applying AI ranking", {
+      model: options.settings.openAiRankingModel,
+      candidatesAvailable: briefingCandidates.length,
+      candidatesSubmitted: submitted,
+      candidatesExcluded: briefingCandidates.length - submitted
+    });
+    briefingCandidates =
+      await options.aiCandidateRanker.rank(briefingCandidates);
+    options.logger.info("AI ranking completed");
+  } else {
+    options.logger.info("AI ranking disabled; using deterministic ranking");
+  }
+
+  const briefing = await options.briefingGenerator.generate(
     briefingCandidates,
     startTime,
     endTime
   );
-  logger.info("Generated briefing", { items: briefing.items.length });
+  options.logger.info("Generated briefing", { items: briefing.items.length });
 
-  await delivery.deliver(briefing);
+  await options.delivery.deliver(briefing);
 
   const deliveredArticles = briefingCandidates.slice(0, briefing.items.length);
   for (const article of deliveredArticles) {
-    await repository.saveProcessedArticle(article);
+    await options.repository.saveProcessedArticle(article);
   }
-  logger.info("Recorded processed articles", { count: deliveredArticles.length });
+  options.logger.info("Recorded processed articles", {
+    count: deliveredArticles.length
+  });
 }
 
 export function calculateNewsWindow(
