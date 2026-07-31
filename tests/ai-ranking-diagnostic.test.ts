@@ -8,10 +8,10 @@ import {
 } from "../src/repositories/article-repository.js";
 import {
   inspectAiRanking,
-  loadRankingPrompt,
   runAiRankingDiagnosticCommand,
   type AiRankingServicePort
 } from "../scripts/inspect-ai-ranking.js";
+import { loadRankingPrompt } from "../src/services/ranking-prompt-loader.js";
 
 describe("inspectAiRanking", () => {
   it("reports pipeline counts, limits submitted candidates, and joins assessments in candidate order", async () => {

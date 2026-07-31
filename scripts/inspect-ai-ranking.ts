@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import OpenAI from "openai";
 import type { NewsCollector } from "../src/collectors/news-collector.js";
 import { RssCollector } from "../src/collectors/rss-collector.js";
@@ -14,10 +12,14 @@ import type { Article } from "../src/models/article.js";
 import type { RankingAssessment } from "../src/models/ranking-assessment.js";
 import { InMemoryArticleRepository } from "../src/repositories/article-repository.js";
 import { AiRankingService } from "../src/services/ai-ranking-service.js";
+import type { AiRankingServicePort } from "../src/services/ai-briefing-candidate-ranker.js";
 import { ArticleFilter } from "../src/services/article-filter.js";
 import { ArticleRanker } from "../src/services/article-ranker.js";
 import { HeadlineDeduplicator } from "../src/services/headline-deduplicator.js";
 import { OpenAiRankingProvider } from "../src/services/openai-ranking-provider.js";
+import { loadRankingPrompt } from "../src/services/ranking-prompt-loader.js";
+
+export type { AiRankingServicePort } from "../src/services/ai-briefing-candidate-ranker.js";
 
 interface BriefingWindowSettings {
   userTimezone: string;
@@ -29,10 +31,6 @@ export interface AiRankingDiagnosticRuntimeSettings
   extends BriefingWindowSettings {
   openAiRankingModel: string;
   aiRankingMaxCandidates: number;
-}
-
-export interface AiRankingServicePort {
-  assess(candidates: readonly Article[]): Promise<RankingAssessment[]>;
 }
 
 export interface AiRankingDiagnosticOptions {
@@ -104,8 +102,6 @@ interface AiRankingDiagnosticRankedAssessment {
   significanceScore: number;
   confidenceScore: number;
 }
-
-const DEFAULT_RANKING_PROMPT_PATH = resolve("prompts", "news-ranking-agent.md");
 
 export async function runAiRankingDiagnosticCommand(
   options: AiRankingDiagnosticCommandOptions = {}
@@ -195,25 +191,6 @@ export async function inspectAiRanking(
     assessments: diagnosticAssessments,
     aiRanking: createAiRankingView(diagnosticAssessments)
   };
-}
-
-export async function loadRankingPrompt(
-  promptPath = DEFAULT_RANKING_PROMPT_PATH
-): Promise<string> {
-  try {
-    const prompt = await readFile(promptPath, "utf8");
-
-    if (prompt.trim().length === 0) {
-      throw new Error("prompt file is empty");
-    }
-
-    return prompt;
-  } catch (error) {
-    throw new Error(
-      `Could not load AI ranking prompt at ${promptPath}: ${getErrorMessage(error)}`,
-      { cause: error }
-    );
-  }
 }
 
 function createAiRankingService(
