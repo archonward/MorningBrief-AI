@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+export const ARTICLE_ID_MAX_LENGTH = 128;
 export const ARTICLE_TITLE_MAX_LENGTH = 500;
 export const ARTICLE_DESCRIPTION_MAX_LENGTH = 4_000;
 export const ARTICLE_CONTENT_MAX_LENGTH = 20_000;
@@ -11,7 +12,7 @@ const httpUrlSchema = z
   .refine(isHttpUrl, "URL must use HTTP or HTTPS");
 
 export const ArticleSchema = z.object({
-  id: z.string().trim().min(1).max(128),
+  id: z.string().trim().min(1).max(ARTICLE_ID_MAX_LENGTH),
   title: z.string().trim().min(1).max(ARTICLE_TITLE_MAX_LENGTH),
   url: httpUrlSchema,
   source: z.string().trim().min(1).max(200),

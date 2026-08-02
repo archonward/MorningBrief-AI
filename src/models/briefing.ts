@@ -1,9 +1,17 @@
 import { z } from "zod";
 
+export const BRIEFING_HEADLINE_MAX_LENGTH = 500;
+export const BRIEFING_SUMMARY_MAX_LENGTH = 4_000;
+export const BRIEFING_WHY_IT_MATTERS_MAX_LENGTH = 2_000;
+
 export const BriefingItemSchema = z.object({
-  headline: z.string().trim().min(1).max(500),
-  summary: z.string().trim().min(1).max(4_000),
-  whyItMatters: z.string().trim().min(1).max(2_000),
+  headline: z.string().trim().min(1).max(BRIEFING_HEADLINE_MAX_LENGTH),
+  summary: z.string().trim().min(1).max(BRIEFING_SUMMARY_MAX_LENGTH),
+  whyItMatters: z
+    .string()
+    .trim()
+    .min(1)
+    .max(BRIEFING_WHY_IT_MATTERS_MAX_LENGTH),
   source: z.string().trim().min(1).max(200),
   url: z
     .string()
